@@ -1,0 +1,79 @@
+# Single-node ZooKeeper for the Onehouse lock provider. Uses the cluster's default StorageClass.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: zk
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zk
+  namespace: zk
+spec:
+  selector:
+    app: zk
+  ports:
+    - name: client
+      port: 2181
+      targetPort: 2181
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zk
+  namespace: zk
+spec:
+  serviceName: zk
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zk
+  template:
+    metadata:
+      labels:
+        app: zk
+    spec:
+      nodeSelector:
+        oh-essential-pods: "true"
+      containers:
+        - name: zookeeper
+          image: zookeeper:3.9.6@sha256:bbf678337a9242fcb6e49e51193855078ec515251cf11fe0bcfabae6a10e040a
+          ports:
+            - containerPort: 2181
+              name: client
+          env:
+            - name: ZOO_4LW_COMMANDS_WHITELIST
+              value: srvr,ruok
+            - name: ZOO_STANDALONE_ENABLED
+              value: "true"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["zkServer.sh", "status"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: datalog
+              mountPath: /datalog
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+    - metadata:
+        name: datalog
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
